@@ -1,0 +1,15 @@
+# Virtual environments (if any)
+env/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# Local database and data files
+*.db
+*.sqlite3
+reservations.json
+
+# VS Code settings
+.vscode/
