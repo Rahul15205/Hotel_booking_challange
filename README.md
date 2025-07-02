@@ -31,7 +31,6 @@ cd Hiring_challange
 ```
 pip install -r requirements.txt
 ```
-(If `requirements.txt` is missing, install: `langchain-groq`, `langgraph`, `langchain-core`, `python-dotenv`, `requests`, `pydantic`)
 
 ### 3. Set Up Environment Variables
 Create a `.env` file in the project root:
@@ -94,4 +93,3 @@ What are the hotel amenities?
 
 ## Notes
 - For real Instagram integration, implement the `send_instagram_message` function with the Instagram Graph API and provide a valid access token.
-- For any questions, contact: founders@powersmy.biz
