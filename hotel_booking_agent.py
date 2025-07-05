@@ -105,21 +105,38 @@ prompt = ChatPromptTemplate.from_messages([
 ])
 
 def detect_intent(state: AgentState) -> AgentState:
-    user_message = state.get("messages", [])[-1].content
-    intent_prompt = f"Classify the intent of this message as 'booking', 'rescheduling', or 'question': {user_message}"
-    intent_response = llm.invoke([HumanMessage(content=intent_prompt)])
-    response_text = getattr(intent_response, "content", "question").strip().lower()
-    # Extract intent using regex or keyword search
-    match = re.search(r"(booking|rescheduling|question)", response_text)
-    if match:
-        intent = match.group(1)
+    user_message = str(state.get("messages", [])[-1].content).lower()
+    ctx = state.get("context", {})
+    
+    # Check if we're already in a booking flow
+    if ctx.get("booking_in_progress"):
+        state["intent"] = "booking"
+        return state
+    
+    # Check if we're already in a rescheduling flow
+    if ctx.get("rescheduling_in_progress"):
+        state["intent"] = "rescheduling"
+        return state
+    
+    # Simple keyword-based intent detection (more reliable than LLM for this)
+    booking_keywords = ["book", "booking", "reserve", "reservation", "room", "stay", "check in"]
+    rescheduling_keywords = ["reschedule", "change", "modify", "update", "cancel"]
+    
+    if any(keyword in user_message for keyword in booking_keywords):
+        state["intent"] = "booking"
+        ctx["booking_in_progress"] = True
+    elif any(keyword in user_message for keyword in rescheduling_keywords):
+        state["intent"] = "rescheduling"
+        ctx["rescheduling_in_progress"] = True
     else:
-        intent = "question"  # fallback
-    state["intent"] = intent
+        state["intent"] = "question"
+    
     return state
 
 def handle_booking(state: AgentState) -> AgentState:
     ctx = state.get("context", {})
+    
+    # Check what information is missing
     if "check_in_date" not in ctx:
         state.setdefault("messages", []).append(AIMessage(content="Please provide check-in date (YYYY-MM-DD)."))
         return state
@@ -156,6 +173,7 @@ def handle_booking(state: AgentState) -> AgentState:
     ctx.pop("check_out_date", None)
     ctx.pop("room_type", None)
     ctx.pop("num_guests", None)
+    ctx.pop("booking_in_progress", None)  # Clear booking flag
     
     confirmation_msg = f"🎉 Booking confirmed! Your reservation ID is: {reservation_id}\n\nDetails:\n• Check-in: {reservation['check_in_date']}\n• Check-out: {reservation['check_out_date']}\n• Room: {reservation['room_type']}\n• Guests: {reservation['num_guests']}\n• Total: ₹{reservation['total_price']}\n\nThank you for choosing Sunset Resort!"
     state.setdefault("messages", []).append(AIMessage(content=confirmation_msg))
@@ -195,11 +213,31 @@ def handle_rescheduling(state: AgentState) -> AgentState:
     return state
 
 def handle_question(state: AgentState) -> AgentState:
-    user_message = state.get("messages", [])[-1].content
+    user_message = str(state.get("messages", [])[-1].content).lower()
     
-    # Enhanced prompt for better responses
-    enhanced_prompt = f"""You are a helpful hotel booking assistant for Sunset Resort in Goa, India. 
+    # Check for specific question types to provide targeted responses
+    if any(word in user_message for word in ["amenities", "facilities", "what do you have", "what's included"]):
+        response_content = f"🏊‍♂️ **Sunset Resort Amenities:**\n\n• Swimming Pool - Perfect for relaxation\n• Spa & Wellness Center - Rejuvenating treatments\n• Restaurant - Local & international cuisine\n• Free Wi-Fi - Stay connected throughout the resort\n• 24/7 Front Desk - Always here to help\n\nAll amenities are included in your stay!"
     
+    elif any(word in user_message for word in ["price", "cost", "rate", "how much", "fee"]):
+        response_content = f"💰 **Room Rates at Sunset Resort:**\n\n• Standard Room: ₹5,000/night (2 guests)\n• Deluxe Room: ₹8,000/night (4 guests)\n• Suite: ₹12,000/night (6 guests)\n\nAll rates include access to all amenities. Would you like to book a room?"
+    
+    elif any(word in user_message for word in ["room", "rooms", "types", "accommodation"]):
+        response_content = f"🏨 **Our Room Types:**\n\n• **Standard Room** - Cozy comfort for 2 guests (₹5,000/night)\n• **Deluxe Room** - Spacious luxury for 4 guests (₹8,000/night)\n• **Suite** - Premium experience for 6 guests (₹12,000/night)\n\nWhich room type interests you?"
+    
+    elif any(word in user_message for word in ["location", "where", "address", "goa"]):
+        response_content = f"📍 **Sunset Resort Location:**\n\nWe're located in beautiful Goa, India - known for its stunning beaches, vibrant culture, and perfect weather!\n\nOur resort offers easy access to:\n• Beautiful beaches\n• Local markets\n• Cultural attractions\n• Adventure activities\n\nWould you like to know more about the area or book your stay?"
+    
+    elif any(word in user_message for word in ["check in", "checkin", "arrival", "time"]):
+        response_content = f"⏰ **Check-in & Check-out Times:**\n\n• Check-in: 2:00 PM\n• Check-out: 11:00 AM\n\nEarly check-in and late check-out may be available upon request, subject to availability."
+    
+    elif any(word in user_message for word in ["cancel", "cancellation", "policy"]):
+        response_content = f"📋 **Cancellation Policy:**\n\n• Free cancellation up to 48 hours before check-in\n• Late cancellations may incur charges\n• No-shows will be charged for the full stay\n\nWe recommend travel insurance for added protection."
+    
+    else:
+        # Enhanced prompt for better responses
+        enhanced_prompt = f"""You are a helpful hotel booking assistant for Sunset Resort in Goa, India. 
+        
 Hotel Information:
 - Name: {HOTEL_DATA['name']}
 - Location: {HOTEL_DATA['location']}
@@ -212,47 +250,75 @@ Room Types and Prices:
 
 User Question: {user_message}
 
-Please provide a helpful, friendly response about the hotel, booking process, or any other relevant information."""
+Please provide a helpful, friendly response about the hotel, booking process, or any other relevant information. Keep it concise and encourage booking if appropriate."""
+        
+        response = llm.invoke([HumanMessage(content=enhanced_prompt)])
+        response_content = getattr(response, "content", str(response))
     
-    response = llm.invoke([HumanMessage(content=enhanced_prompt)])
-    response_content = getattr(response, "content", str(response))
     state.setdefault("messages", []).append(AIMessage(content=response_content))
     return state
 
 def send_instagram_message(user_id: str, message: str, access_token: str) -> None:
     print(f"[MOCK INSTAGRAM DM to {user_id}]: {message}")
 
+def extract_booking_info(user_message: str) -> Dict[str, Any]:
+    """Extract booking information from a user message"""
+    info = {}
+    user_message_lower = user_message.lower()
+    
+    # Extract dates
+    date_matches = re.findall(r'\d{4}-\d{2}-\d{2}', user_message)
+    if len(date_matches) >= 1:
+        info["check_in_date"] = date_matches[0]
+    if len(date_matches) >= 2:
+        info["check_out_date"] = date_matches[1]
+    
+    # Extract room type
+    user_words = user_message_lower.split()
+    for word in user_words:
+        if word in HOTEL_DATA["room_types"]:
+            info["room_type"] = word
+            break
+    
+    # Extract number of guests
+    guest_match = re.search(r'(\d+)\s*(?:guests?|people|persons?)', user_message_lower)
+    if guest_match:
+        info["num_guests"] = int(guest_match.group(1))
+    else:
+        # Look for standalone numbers that might be guest count
+        number_matches = re.findall(r'\b(\d+)\b', user_message)
+        for num in number_matches:
+            num_int = int(num)
+            if 1 <= num_int <= 10:  # Reasonable guest count
+                info["num_guests"] = num_int
+                break
+    
+    return info
+
 def process_input(state: AgentState) -> AgentState:
     user_message = str(state.get("messages", [])[-1].content)
     ctx = state.get("context", {})
     
     if state.get("intent") == "booking":
+        # Try to extract multiple pieces of info from the message
+        extracted_info = extract_booking_info(user_message)
+        
+        # Update context with extracted information
+        for key, value in extracted_info.items():
+            if key not in ctx:
+                ctx[key] = value
+        
+        # Now check what's still missing
         if "check_in_date" not in ctx:
-            # Validate date format
-            if re.match(r'\d{4}-\d{2}-\d{2}', user_message):
-                ctx["check_in_date"] = user_message
-            else:
-                state.setdefault("messages", []).append(AIMessage(content="Please provide the check-in date in YYYY-MM-DD format (e.g., 2025-07-01)."))
+            state.setdefault("messages", []).append(AIMessage(content="Please provide check-in date (YYYY-MM-DD)."))
         elif "check_out_date" not in ctx:
-            if re.match(r'\d{4}-\d{2}-\d{2}', user_message):
-                ctx["check_out_date"] = user_message
-            else:
-                state.setdefault("messages", []).append(AIMessage(content="Please provide the check-out date in YYYY-MM-DD format (e.g., 2025-07-03)."))
+            state.setdefault("messages", []).append(AIMessage(content="Please provide check-out date (YYYY-MM-DD)."))
         elif "room_type" not in ctx:
-            if user_message.lower() in HOTEL_DATA["room_types"]:
-                ctx["room_type"] = user_message.lower()
-            else:
-                room_types = ", ".join(HOTEL_DATA["room_types"].keys())
-                state.setdefault("messages", []).append(AIMessage(content=f"Please choose a valid room type: {room_types}."))
+            room_types = ", ".join(HOTEL_DATA["room_types"].keys())
+            state.setdefault("messages", []).append(AIMessage(content=f"Please choose a room type: {room_types}."))
         elif "num_guests" not in ctx:
-            if user_message.isdigit():
-                num_guests = int(user_message)
-                if num_guests > 0:
-                    ctx["num_guests"] = num_guests
-                else:
-                    state.setdefault("messages", []).append(AIMessage(content="Please enter a valid number of guests (greater than 0)."))
-            else:
-                state.setdefault("messages", []).append(AIMessage(content="Please enter a valid number of guests."))
+            state.setdefault("messages", []).append(AIMessage(content="How many guests?"))
+        # If all info is present, handle_booking will complete the booking
     
     elif state.get("intent") == "rescheduling":
         if "reservation_id" not in ctx:
@@ -261,13 +327,16 @@ def process_input(state: AgentState) -> AgentState:
             else:
                 state.setdefault("messages", []).append(AIMessage(content="Please enter a valid reservation ID (numbers only)."))
         elif "new_check_in_date" not in ctx:
-            if re.match(r'\d{4}-\d{2}-\d{2}', user_message):
-                ctx["new_check_in_date"] = user_message
+            date_match = re.search(r'\d{4}-\d{2}-\d{2}', user_message)
+            if date_match:
+                ctx["new_check_in_date"] = date_match.group()
+                state.setdefault("messages", []).append(AIMessage(content="Please provide new check-out date (YYYY-MM-DD)."))
             else:
                 state.setdefault("messages", []).append(AIMessage(content="Please provide the new check-in date in YYYY-MM-DD format."))
         elif "new_check_out_date" not in ctx:
-            if re.match(r'\d{4}-\d{2}-\d{2}', user_message):
-                ctx["new_check_out_date"] = user_message
+            date_match = re.search(r'\d{4}-\d{2}-\d{2}', user_message)
+            if date_match:
+                ctx["new_check_out_date"] = date_match.group()
             else:
                 state.setdefault("messages", []).append(AIMessage(content="Please provide the new check-out date in YYYY-MM-DD format."))
     
