@@ -4,7 +4,7 @@ from typing import Dict, Any, List, TypedDict, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 import requests
 import dotenv
 import re
@@ -63,7 +63,7 @@ def save_chat_sessions(sessions):
         print(f"Error saving chat sessions: {e}")
 
 class AgentState(TypedDict, total=False):
-    messages: List[HumanMessage]
+    messages: List[BaseMessage]
     context: Dict[str, Any]
     intent: str
     reservation_id: Optional[int]
@@ -223,7 +223,7 @@ def send_instagram_message(user_id: str, message: str, access_token: str) -> Non
     print(f"[MOCK INSTAGRAM DM to {user_id}]: {message}")
 
 def process_input(state: AgentState) -> AgentState:
-    user_message = state.get("messages", [])[-1].content
+    user_message = str(state.get("messages", [])[-1].content)
     ctx = state.get("context", {})
     
     if state.get("intent") == "booking":
@@ -245,7 +245,7 @@ def process_input(state: AgentState) -> AgentState:
                 room_types = ", ".join(HOTEL_DATA["room_types"].keys())
                 state.setdefault("messages", []).append(AIMessage(content=f"Please choose a valid room type: {room_types}."))
         elif "num_guests" not in ctx:
-            if isinstance(user_message, str) and user_message.isdigit():
+            if user_message.isdigit():
                 num_guests = int(user_message)
                 if num_guests > 0:
                     ctx["num_guests"] = num_guests
@@ -256,7 +256,7 @@ def process_input(state: AgentState) -> AgentState:
     
     elif state.get("intent") == "rescheduling":
         if "reservation_id" not in ctx:
-            if isinstance(user_message, str) and user_message.isdigit():
+            if user_message.isdigit():
                 ctx["reservation_id"] = int(user_message)
             else:
                 state.setdefault("messages", []).append(AIMessage(content="Please enter a valid reservation ID (numbers only)."))
