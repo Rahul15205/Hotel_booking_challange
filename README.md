@@ -6,7 +6,7 @@ This project is an AI-powered hotel booking agent built with LangGraph, LangChai
 - Reschedule existing reservations
 - Answer hotel-related questions (amenities, check-in times, etc.)
 - Maintain conversation history for context-aware responses
-- (Demo) Interact with users via Instagram DMs (mocked for local testing)
+- Interact with users via Instagram DMs (mocked due to time constraints in obtaining Instagram Graph API access)
 
 ---
 
@@ -14,7 +14,7 @@ This project is an AI-powered hotel booking agent built with LangGraph, LangChai
 - **Conversational AI**: Guides users through booking, rescheduling, and Q&A.
 - **Stateful**: Maintains context and conversation history using LangGraph.
 - **Lightweight Storage**: Uses a JSON file for reservation data.
-- **Instagram Integration**: Mocked for demo; prints responses instead of sending real DMs.
+- **Instagram Integration**: Mocked due to time constraints in obtaining Instagram Graph API access; prints responses to console instead of sending real DMs.
 - **Robust Error Handling**: Handles invalid input, API errors, and file errors.
 
 ---
@@ -31,7 +31,6 @@ cd Hiring_challange
 ```
 pip install -r requirements.txt
 ```
-(If `requirements.txt` is missing, install: `langchain-groq`, `langgraph`, `langchain-core`, `python-dotenv`, `requests`, `pydantic`)
 
 ### 3. Set Up Environment Variables
 Create a `.env` file in the project root:
@@ -43,7 +42,7 @@ GROQ_API_KEY=your_actual_groq_api_key_here
 ```
 python hotel_booking_agent.py
 ```
-You will see the agent's responses printed to the console (mock Instagram DMs).
+You will see the agent's responses printed to the console (mock Instagram DMs due to time constraints in obtaining Instagram Graph API access).
 
 ---
 
@@ -52,7 +51,7 @@ You will see the agent's responses printed to the console (mock Instagram DMs).
 - **TypedDict State**: Ensures type safety and compatibility with LangGraph.
 - **LLM (Groq)**: Handles intent classification and Q&A. Model: `llama3-70b-8192` (free tier, fast, and reliable).
 - **JSON Storage**: Simple, portable, and easy to inspect for demo/testing.
-- **Instagram API Mock**: For demo, the `send_instagram_message` function prints to console. Swap in real API logic for production.
+- **Instagram API Mock**: Due to time constraints in obtaining Instagram Graph API access, the `send_instagram_message` function prints to console. Swap in real API logic for production when Instagram Graph API access is available.
 - **Error Handling**: All user input and API calls are wrapped with error handling for robustness.
 
 ---
@@ -93,5 +92,5 @@ What are the hotel amenities?
 ---
 
 ## Notes
-- For real Instagram integration, implement the `send_instagram_message` function with the Instagram Graph API and provide a valid access token.
-- For any questions, contact: founders@powersmy.biz
+- Instagram Graph API integration was not implemented due to time constraints in obtaining API access (requires app review, business account setup, and permissions approval).
+- For real Instagram integration, implement the `send_instagram_message` function with the Instagram Graph API and provide a valid access token once access is granted.
